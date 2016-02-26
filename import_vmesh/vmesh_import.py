@@ -1,7 +1,6 @@
 from mathutils import *
 
 from . import pyVRF
-from . import dataParser
 
 import importlib
 
@@ -12,9 +11,14 @@ def import_file(path):
     importlib.reload(pyVRF)
     print('Reloading pyVRF...')
 
-    bones = {}
+    #Get the data
     blocks = pyVRF.readBlocks( path )
     vbib = blocks['VBIB']
+
+    #Go to object mode before doing anything
+    if bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+
     #Add geometry
     newObj = addGeometry( vbib )
     #Add
@@ -22,8 +26,6 @@ def import_file(path):
 
     #add rigging
     addRig(newObj, skeleton, vbib)
-
-
 
 #Add geometry to the scene, returns the added object
 def addGeometry( data ):
@@ -36,8 +38,6 @@ def addGeometry( data ):
     scn.objects.link(ob)
     scn.objects.active = ob
     scn.update()
- 
-
  
     # Create mesh from given verts, edges, faces. Either edges or
     # faces should be [], or you ask for problems
