@@ -1,5 +1,6 @@
 import struct
 import io
+import numpy as np
 
 class BinaryReader:
     # Map well-known type names into struct format characters.
@@ -87,7 +88,7 @@ def readBlocks( path ):
         if name == 'DATA':
             blocks[name] = readBinaryKV3( reader, block[2] )
         elif name == 'VBIB':
-            blocks[name] = reader.readBytes( block[2] )
+            blocks[name] = readVBIB( reader, block[2] )
         else:
             blocks[name] = reader.readBytes( block[2] )
 
@@ -198,6 +199,7 @@ def parseNode( reader, parent, inArray, stringTable ):
     #Object
     elif datatype == 9:
         length = reader.read('uint32')
+        print(length)
         newObject = {}
         for _ in range(length):
             parseNode( reader, newObject, False, stringTable )
@@ -218,3 +220,133 @@ def readNullTermString( reader ):
         string = string + c
         c = reader.readBytes(1)
     return string.decode('utf-8', 'ignore')
+
+def readVBIB(reader, totalSize):
+    results = {}
+    pos = reader.getPos()
+    header = {}
+    header["vertexHOffset"] = reader.read('uint32')
+    header["vertexHLink"] = pos + header["vertexHOffset"]
+    header["vertexHCount"] = reader.read('uint32')
+    pos = reader.getPos()
+    header["indexHOffset"] = reader.read('uint32')
+    header["indexHLink"] = pos + header["indexHOffset"]
+    header["indexHCount"] = reader.read('uint32')
+
+    attributes = readAttributes(reader, header["vertexHLink"], header["vertexHCount"])
+    print(attributes)
+    results["vertexdata"] = readVertexAttributeData(reader,  header["vertexHLink"], header["vertexHCount"], attributes)
+    results["indexdata"] = readIndices(reader, header["indexHLink"], header["indexHCount"])
+    return results
+    
+def readAttributes(reader, offset, count):
+    attributes = {}
+    for x in range(0, count):
+        reader.goto(offset +  x * 24 + 12)
+        acount = reader.read("uint32")
+        print( acount) 
+        reader.goto(offset + 24 * x + 8)
+        pos = reader.read("uint32")
+       # print pos
+        link = offset + 24 * x + 8 + pos
+        #print link
+        for y in range (acount):
+            here = link + y *56
+            reader.goto(here)
+            name = readNullTermString(reader)
+           # print name
+            reader.goto(here + 40)
+            attributes[name] = reader.read("uint32")
+    return attributes
+
+def readIndices(reader, offset, count):
+    indexgroups = []
+    for x in range(0, count):
+        indices = []
+        reader.goto(offset + x * 24)
+        icount = reader.read('uint32')
+        print(icount)
+        reader.goto(offset + x * 24 + 16)
+        link =  offset + x * 24 + 16 + reader.read('uint32')
+        reader.goto(link)
+        for q in range(int(icount / 3)):
+            a = reader.read("uint16")
+            b = reader.read("uint16")
+            c = reader.read("uint16")
+            #print(a,b,c)
+            indices.append((a,b,c))
+        indexgroups.append(indices)
+
+    return indexgroups
+
+def readVertexAttributeData(reader, offset, count,attributes):
+    vertexgroups = []
+    for x in range(count):
+        vertices = {}
+        vertices["vertex"] = []
+        reader.goto(offset + x * 24)
+        vcount = reader.read('uint32')
+        reader.goto(offset + x * 24 + 16)
+        link =  offset + x * 24 + 16 + reader.read('uint32')
+        reader.goto(offset +  x * 24 + 4)
+        size =  reader.read('uint32');
+        print('sssssssssss',size)
+        reader.goto(link)
+        for q in range(0, vcount):
+            for key, value in attributes.items():
+                reader.goto(link + q * size + value)
+                if key == "POSITION":
+                    #read vertex positions
+                    x = reader.read("float")
+                    y = reader.read("float")
+                    z = reader.read("float")
+                    #if q < 10:
+                    #print(x,y,z)
+                    vertices["vertex"].append((x,y,z))
+
+                if key == "TEXCOORD":
+                    #read texture (uv) coordinates
+                    qbuffer = reader.readBytes(2)
+                    u = np.frombuffer(qbuffer, dtype=np.float16)[0]
+                    qbuffer = reader.readBytes(2)
+                    v = 1 - np.frombuffer(qbuffer, dtype=np.float16)[0]
+
+                    if not "texcoords" in vertices:
+                        vertices["texcoords"] = []
+                    vertices["texcoords"].append((u, v))
+
+                if key == "NORMAL":
+                    #read normals, not sure how to unpack pls helperino RGBA8?
+                    normal = reader.read('uint32')
+
+                    if not "normals" in vertices:
+                        vertices["normals"] = []
+                    vertices["normals"].append(normal)
+
+                if key == "BLENDINDICES":
+                    #read bone indices
+                    a = reader.read("uint8")
+                    b = reader.read("uint8")
+                    c = reader.read("uint8")
+                    d = reader.read("uint8") #bone num? unused? bullshit? you decide
+
+                    if not "blendindices" in vertices:
+                        vertices["blendindices"] = []
+                    vertices["blendindices"].append((a,b,c,d))
+                    #print(a,b,c,d)
+
+                if key == "BLENDWEIGHT":
+                    #read bone weights
+                    a = reader.read("uint8")
+                    b = reader.read("uint8")
+                    c = reader.read("uint8")
+
+                    if not "blendweights" in vertices:
+                        vertices["blendweights"] = []
+                    vertices["blendweights"].append((a,b,c))
+
+
+
+        vertexgroups.append(vertices)
+
+    return vertexgroups

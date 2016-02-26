@@ -1,6 +1,6 @@
 bl_info = {
     "name": "Valve vmesh_c importer",
-    "author": "Perry",
+    "author": "Perry & Ricochet",
     "blender": (2, 7, 4),
     "api": 35622,
     "location": "File > Import-Export",
