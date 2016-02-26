@@ -74,13 +74,16 @@ def addSkeleton( data, mesh ):
         
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
 
+    #Create skeleton bone by bone
+    matrices = {}
     bones = {}
     for bone in data['m_skeleton']['m_bones']:
         newBone = armature.edit_bones.new( bone['m_boneName'] )
 
+        #Set parent
         if len(bone['m_parentName']) > 0:
             newBone.parent = bones[bone['m_parentName']]
-            newBone.use_connect = True
+            newBone.use_connect = False
 
         #Set position
         m = bone['m_invBindPose']
@@ -90,18 +93,45 @@ def addSkeleton( data, mesh ):
                                  [0, 0, 0, 1]])
 
         inverseBindPose.invert()
-        parentMat = Matrix()
-        if newBone.parent:
-            newBone.head = newBone.parent.tail
-        newBone.tail = inverseBindPose.to_translation()
 
+        #Set head and tail
+        newBone.head = inverseBindPose.to_translation()
+        if newBone.parent:
+            #Calculate the average position of siblings to set the parent tail to
+            avgPos = Vector()
+            num = 0
+            for pc in newBone.parent.children:
+                avgPos = avgPos + pc.head
+                num = num + 1
+            avgPos = avgPos / num
+            newBone.parent.tail = avgPos
+
+        #Set tail radius - doesn't seem to do anything?
         newBone.tail_radius = bone['m_flSphereRadius']
 
+        #Save the bone to parent later
         bones[bone['m_boneName']] = newBone
+
+        #Also keep track fo the matrix for later
+        matrices[newBone] = inverseBindPose
 
         #global bonesdata array. Fix/Change?
         mesh.vertex_groups.new(bone['m_boneName'])
         bonesdata.append(bone['m_boneName'])
+
+    #Show extreme bones - i.e. bones without children to set the tail position to
+    for bone in matrices:
+        if len(bone.children) == 0:
+            #Show extreme bones as extensions of their parent
+            bone.tail = bone.head + (bone.parent.tail - bone.parent.head).normalized() * 4
+    
+    #Merge heads/tails where a parent has only 1 child
+    for bone in matrices:
+        if len(bone.children) == 1:
+            #Connect bones that have no siblings to their parents
+            bone.children[0].use_connect = True
+
+
     return obj
 
 def addRig(mesh, skeleton, vbib):
@@ -111,7 +141,6 @@ def addRig(mesh, skeleton, vbib):
         #print(index, weight)
         for q in range(len(weight)):
             vg = mesh.vertex_groups.get(bonesdata[vbib["vertexdata"][0]["blendindices"][index][q]])
-            print(vg.name, float( weight[q] ) /255.0)
             #not sure if this actually works correctly --v
             vg.add([index],  float( weight[q] ) /255.0, "REPLACE")
     mod = mesh.modifiers.new('Armature', 'ARMATURE')
