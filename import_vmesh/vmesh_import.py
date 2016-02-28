@@ -7,6 +7,8 @@ import importlib
 import bpy
 global bonesdata
 bonesdata = []
+
+#Import a model from a vmesh_c file
 def import_file(path):
     importlib.reload(pyVRF)
     print('Reloading pyVRF...')
@@ -20,12 +22,16 @@ def import_file(path):
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
 
     #Add geometry
-    newObj = addGeometry( vbib )
-    #Add
-    skeleton = addSkeleton( blocks['DATA'], newObj )
+    meshObject = addGeometry( vbib )
+
+    #Add skeleton
+    skeleton = addSkeleton( blocks['DATA'], meshObject )
+
+    #Add hitboxes
+    addHitboxes( blocks['DATA'], skeleton )
 
     #add rigging
-    addRig(newObj, skeleton, vbib)
+    addRig(meshObject, skeleton, vbib)
 
 #Add geometry to the scene, returns the added object
 def addGeometry( data ):
@@ -71,14 +77,16 @@ def addSkeleton( data, mesh ):
     scn.objects.link(obj)
     scn.objects.active = obj
     obj.select = True
-        
-    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    
+    #Go to edit mode to access edit bones
+    bpy.ops.object.mode_set(mode='EDIT')
 
     #Create skeleton bone by bone
-    matrices = {}
     bones = {}
     for bone in data['m_skeleton']['m_bones']:
+        #Add the new bone
         newBone = armature.edit_bones.new( bone['m_boneName'] )
+        newBone.use_relative_parent = True
 
         #Set parent
         if len(bone['m_parentName']) > 0:
@@ -95,7 +103,7 @@ def addSkeleton( data, mesh ):
         inverseBindPose.invert()
 
         #Set head and tail
-        newBone.head = inverseBindPose.to_translation()
+        #newBone.head = inverseBindPose.to_translation()
         if newBone.parent:
             #Calculate the average position of siblings to set the parent tail to
             avgPos = Vector()
@@ -104,36 +112,68 @@ def addSkeleton( data, mesh ):
                 avgPos = avgPos + pc.head
                 num = num + 1
             avgPos = avgPos / num
-            newBone.parent.tail = avgPos
+            #newBone.parent.tail = avgPos
 
         #Set tail radius - doesn't seem to do anything?
         newBone.tail_radius = bone['m_flSphereRadius']
 
+        newBone.head = Vector((0,0,0))
+        newBone.tail = Vector((5,0,0))
+        newBone.matrix = inverseBindPose
+
         #Save the bone to parent later
         bones[bone['m_boneName']] = newBone
 
-        #Also keep track fo the matrix for later
-        matrices[newBone] = inverseBindPose
+        #Add vertex group for the current bone
+        mesh.vertex_groups.new(bone['m_boneName'])
 
         #global bonesdata array. Fix/Change?
-        mesh.vertex_groups.new(bone['m_boneName'])
         bonesdata.append(bone['m_boneName'])
-
-    #Show extreme bones - i.e. bones without children to set the tail position to
-    for bone in matrices:
-        if len(bone.children) == 0:
-            #Show extreme bones as extensions of their parent
-            bone.tail = bone.head + (bone.parent.tail - bone.parent.head).normalized() * 4
-    
-    #Merge heads/tails where a parent has only 1 child
-    for bone in matrices:
-        if len(bone.children) == 1:
-            #Connect bones that have no siblings to their parents
-            bone.children[0].use_connect = True
-
 
     return obj
 
+#Add all hitboxes from the vmesh
+def addHitboxes( data, skeleton ):
+
+    hitboxes = data['m_hitboxsets']
+
+    for group in hitboxes:
+        groupname = group['key']
+        for hitbox in group['value']['m_HitBoxes']:
+            #Go to edit mode to add new bones
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            #Create new empty cube
+            bpy.ops.object.add(type='EMPTY')
+            empty = bpy.context.active_object
+            empty.empty_draw_type = 'CUBE'
+            empty.name = groupname+"/"+hitbox['m_name']
+
+            #Attach to its parent
+            empty.parent = skeleton
+            empty.parent_type = 'BONE'
+            empty.parent_bone = hitbox['m_sBoneName']
+
+            #Set size
+            minBounds = Vector(hitbox['m_vMinBounds'])
+            maxBounds = Vector(hitbox['m_vMaxBounds'])
+            size = maxBounds - minBounds
+            
+            #Set the hitbox transform to its parent transform
+            empty.matrix_local = skeleton.data.bones[empty.parent_bone].matrix_local            
+
+            #Shift the hitbox since it is not centered around around the bone origin
+            offset = maxBounds - size/2
+            offset.rotate(empty.rotation_euler)
+            empty.location += offset
+
+            #Set the hitbox size
+            empty.scale = size/2
+
+
+    return True
+
+#Add the armature modifier to the mesh
 def addRig(mesh, skeleton, vbib):
     for index in range(len(vbib["vertexdata"][0]["blendindices"])):
         #print(index)
