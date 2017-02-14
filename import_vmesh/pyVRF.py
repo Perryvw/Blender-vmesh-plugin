@@ -313,7 +313,7 @@ def readVertexAttributeData(reader, offset, count,attributes):
 
                     if not "texcoords" in vertices:
                         vertices["texcoords"] = []
-                    vertices["texcoords"].append((u, v))
+                    vertices["texcoords"].append((u % 1, v % 1))
 
                 if key == "NORMAL":
                     #read normals, not sure how to unpack pls helperino RGBA8?
