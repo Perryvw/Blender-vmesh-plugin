@@ -178,12 +178,14 @@ def addHitboxes( data, skeleton ):
 def addRig(mesh, skeleton, vbib):
     for index in range(len(vbib["vertexdata"][0]["blendindices"])):
         #print(index)
-        weight = vbib["vertexdata"][0]["blendweights"][index]
-        #print(index, weight)
-        for q in range(len(weight)):
-            vg = mesh.vertex_groups.get(bonesdata[vbib["vertexdata"][0]["blendindices"][index][q]])
-            #not sure if this actually works correctly --v
-            vg.add([index],  float( weight[q] ) /255.0, "REPLACE")
+        if "blendweights" in vbib["vertexdata"][0]:
+            weight = vbib["vertexdata"][0]["blendweights"][index]
+            #print(index, weight)
+            for q in range(len(weight)):
+                vg = mesh.vertex_groups.get(bonesdata[vbib["vertexdata"][0]["blendindices"][index][q]])
+                #not sure if this actually works correctly --v
+                vg.add([index],  float( weight[q] ) /255.0, "REPLACE")
+
     mod = mesh.modifiers.new('Armature', 'ARMATURE')
     mod.object = skeleton
     mod.use_bone_envelopes = False
