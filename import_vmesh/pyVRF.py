@@ -199,7 +199,6 @@ def parseNode( reader, parent, inArray, stringTable ):
     #Object
     elif datatype == 9:
         length = reader.read('uint32')
-        print(length)
         newObject = {}
         for _ in range(length):
             parseNode( reader, newObject, False, stringTable )
@@ -244,12 +243,12 @@ def readAttributes(reader, offset, count):
     for x in range(0, count):
         reader.goto(offset +  x * 24 + 12)
         acount = reader.read("uint32")
-        print( acount) 
+        # print acount 
         reader.goto(offset + 24 * x + 8)
         pos = reader.read("uint32")
-       # print pos
+        # print pos
         link = offset + 24 * x + 8 + pos
-        #print link
+        # print link
         for y in range (acount):
             here = link + y *56
             reader.goto(here)
@@ -265,7 +264,6 @@ def readIndices(reader, offset, count):
         indices = []
         reader.goto(offset + x * 24)
         icount = reader.read('uint32')
-        print(icount)
         reader.goto(offset + x * 24 + 16)
         link =  offset + x * 24 + 16 + reader.read('uint32')
         reader.goto(link)

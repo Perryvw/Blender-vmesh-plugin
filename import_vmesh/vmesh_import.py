@@ -160,7 +160,8 @@ def addHitboxes( data, skeleton ):
             size = maxBounds - minBounds
             
             #Set the hitbox transform to its parent transform
-            empty.matrix_local = skeleton.data.bones[empty.parent_bone].matrix_local            
+            if empty.parent_bone in skeleton.data.bones:
+                empty.matrix_local = skeleton.data.bones[empty.parent_bone].matrix_local            
 
             #Shift the hitbox since it is not centered around around the bone origin
             offset = maxBounds - size/2
