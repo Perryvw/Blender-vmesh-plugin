@@ -213,9 +213,7 @@ def parseNode( reader, parent, inArray, stringTable ):
 def readNullTermString( reader ):
     string = b''
     c = reader.readBytes(1)
-    k = 0
-    while c != b'\x00' and k < 100:
-        k = k + 1
+    while c != b'\x00':
         string = string + c
         c = reader.readBytes(1)
     return string.decode('utf-8', 'ignore')
@@ -288,7 +286,7 @@ def readVertexAttributeData(reader, offset, count,attributes):
         link =  offset + x * 24 + 16 + reader.read('uint32')
         reader.goto(offset +  x * 24 + 4)
         size =  reader.read('uint32');
-        print('sssssssssss',size)
+
         reader.goto(link)
         for q in range(0, vcount):
             for key, value in attributes.items():
